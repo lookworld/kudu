@@ -111,7 +111,24 @@ namespace Kudu.TestHarness
             File.WriteAllText(fullPath, content);
         }
 
+        static bool ErrorOccurred = false;
         public static void Run(string testName, Action<ApplicationManager> action)
+        {
+            // Don't do anything after the first failure
+            if (ErrorOccurred) return;
+
+            try
+            {
+                RunNoCatch(testName, action);
+            }
+            catch
+            {
+                ErrorOccurred = true;
+                throw;
+            }
+        }
+
+        static void RunNoCatch(string testName, Action<ApplicationManager> action)
         {
             var appManager = CreateApplication(KuduUtils.GetRandomWebsiteName(testName));
 
