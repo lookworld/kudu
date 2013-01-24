@@ -64,10 +64,15 @@ namespace Kudu.Services.GitServer
                     UpdateNoCacheForResponse(context.Response);
 
                     context.Response.ContentType = "application/x-git-receive-pack-result";
-                    
-                    using (_deploymentManager.CreateTemporaryDeployment(Resources.ReceivingChanges))
+
+                    string tempId = _deploymentManager.CreateTemporaryDeployment(Resources.ReceivingChanges);
+                    try
                     {
                         _gitServer.Receive(context.Request.GetInputStream(), context.Response.OutputStream);
+                    }
+                    finally
+                    {
+                        _deploymentManager.DeleteTemporaryDeployment(tempId);
                     }
                 },
                 () =>

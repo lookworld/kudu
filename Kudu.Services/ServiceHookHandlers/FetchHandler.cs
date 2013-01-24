@@ -142,12 +142,20 @@ namespace Kudu.Services
                 var handler = deploymentInfo.Handler;
                 using (_tracer.Step("Performing fetch based deployment"))
                 {
-                    using (_deploymentManager.CreateTemporaryDeployment(Resources.ReceivingChanges, deploymentInfo.TargetChangeset, deploymentInfo.Deployer))
+                    bool useTempId = deploymentInfo.TargetChangeset == null;
+                    string id = _deploymentManager.CreateTemporaryDeployment(Resources.ReceivingChanges, deploymentInfo.TargetChangeset, deploymentInfo.Deployer);
+                    ILogger innerLogger = null;
+                    try
                     {
                         IRepository repository = _repositoryFactory.EnsureRepository(deploymentInfo.RepositoryType);
+                        ILogger logger = _deploymentManager.GetLogger(id);
 
                         // Fetch changes from the repository
+                        innerLogger = logger.Log(Resources.FetchingChanges);
                         deploymentInfo.Handler.Fetch(repository, deploymentInfo, targetBranch);
+
+                        // set to null as Deploy() perform logger
+                        innerLogger = null;
 
                         // Perform the actual deployment
                         _deploymentManager.Deploy(repository, deploymentInfo.TargetChangeset, deploymentInfo.Deployer, clean: false);
@@ -167,6 +175,21 @@ namespace Kudu.Services
                                 _tracer.TraceError("Failed to delete marker file");
                             }
                         }
+                    }
+                    catch (Exception ex)
+                    {
+                        if (innerLogger != null)
+                        {
+                            innerLogger.Log(ex);
+                        }
+
+                        throw;
+                    }
+
+                    // successful, cleanup if useTempId
+                    if (useTempId)
+                    {
+                        _deploymentManager.DeleteTemporaryDeployment(id);
                     }
                 }
 
